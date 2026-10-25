@@ -1,0 +1,32 @@
+// The DLL's version resource, shown under Properties > Details in Explorer. mingw-build.sh generates version.h.
+#include <winver.h>
+#include "version.h"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     CMSPEED_VERSION_NUM
+PRODUCTVERSION  CMSPEED_VERSION_NUM
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       CMSPEED_FILEFLAGS
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_DLL
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "cmspeed"
+            VALUE "FileDescription",  "cmspeed for Championship Manager 01/02"
+            VALUE "FileVersion",      CMSPEED_VERSION_STR
+            VALUE "InternalName",     "cmspeed"
+            VALUE "LegalCopyright",   "Copyright (c) 2026 Joel Wikberg, MIT License"
+            VALUE "OriginalFilename", "dsound.dll"
+            VALUE "ProductName",      "cmspeed"
+            VALUE "ProductVersion",   CMSPEED_VERSION_STR
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

@@ -1,0 +1,4 @@
+dsound.dll
+build/
+dist/
+*.exe

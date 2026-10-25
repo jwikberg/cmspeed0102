@@ -1,0 +1,103 @@
+name: Release
+
+# Run from the Actions tab. Builds main as the next version and creates a draft release with the zip attached.
+# Review the draft on the Releases page and publish it there; publishing creates the vX.Y.Z tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the last release's version to increase
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: Exact version instead, such as 1.0.0 (overrides bump)
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency: release
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Require main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Releases are made from main, not $GITHUB_REF"
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+          INPUT_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          last=${last#v}
+          if [ -n "$INPUT_VERSION" ]; then
+            version=${INPUT_VERSION#v}
+          else
+            IFS=. read -r major minor patch <<< "${last:-0.0.0}"
+            case $BUMP in
+              major) version="$((major + 1)).0.0" ;;
+              minor) version="$major.$((minor + 1)).0" ;;
+              patch) version="$major.$minor.$((patch + 1))" ;;
+            esac
+          fi
+          if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must look like 1.2.3, got '$version'"; exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "::error::Tag v$version already exists"; exit 1
+          fi
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::A release (or draft) for v$version already exists; delete it or pick another version"; exit 1
+          fi
+          echo "Last release: ${last:-none}. Releasing $version."
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+
+  draft:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.zip }}
+          path: dist
+          skip-decompress: true # keep the zip as uploaded instead of extracting its contents
+
+      - name: List downloaded files
+        run: ls -l dist
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          ZIP: ${{ needs.build.outputs.zip }}
+        run: |
+          gh release create "v$VERSION" "dist/$ZIP" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --target "$GITHUB_SHA" \
+            --title "cmspeed $VERSION" \
+            --generate-notes

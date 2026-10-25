@@ -1,0 +1,62 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Version to build, such as 1.2.0. Empty derives it from git tags (tools/version.sh).
+        type: string
+        default: ''
+    outputs:
+      version:
+        value: ${{ jobs.build.outputs.version }}
+      zip:
+        value: ${{ jobs.build.outputs.zip }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      zip: ${{ steps.package.outputs.zip }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # tools/version.sh needs the tags and history
+
+      - name: Install mingw-w64
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc-mingw-w64-i686 binutils-mingw-w64-i686
+
+      - name: Determine version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: echo "version=${INPUT_VERSION:-$(tools/version.sh)}" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        env:
+          CMSPEED_VERSION: ${{ steps.version.outputs.version }}
+        run: ./mingw-build.sh
+
+      - name: Package
+        id: package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          zip="cmspeed-$VERSION.zip"
+          mkdir -p dist
+          zip -j "dist/$zip" dsound.dll cmspeed.ini README.md LICENSE
+          echo "zip=$zip" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: dist/${{ steps.package.outputs.zip }}
+          archive: false # already a zip; the artifact downloads as cmspeed-<version>.zip
+          if-no-files-found: error

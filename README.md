@@ -6,8 +6,10 @@ DISCLAIMER: This project was researched and developed through Claude Code.
 
 cmspeed is a drop-in `dsound.dll` for Championship Manager 01/02, version 3.9.68. It adds:
 
-- **Faster holidays.** A holiday day takes well under half a second instead of about 4 s. Most of the stock time was a fixed
-  2-second pause per day, plus a slow float-to-int conversion in the match engine.
+- **Faster day processing.** Every time the game advances a day, it runs
+  the same simulation: other clubs' matches, the AI's transfer shortlists and so on. Now matches are simulated in parallel, the AI's shortlist scans can be split over threads, and the match engine's slow float-to-int conversion is replaced. Parallel matches alone cut that time by about a third, and the
+  faster conversion by about 15%.
+- **Faster holidays.** The stock game has a fixed wait time of 2 seconds before proceeding to the next day while on holiday, this is now removed. In tests this brought down processing a "holiday day" from 4 seconds to half a second.
 - **Faster new games.** Creating a game with every league selected takes about 57 s instead of about 157 s.
 - **Extras.** The startup logos are gone, and the mouse's back/forward buttons work.
 
@@ -60,7 +62,7 @@ thing, or they change only what the CPU does while it waits.
 
 | Option | Default | What it does | Docs |
 |---|---|---|---|
-| `fast_ftol` | `1` | The game's float-to-int conversion uses one SSE3 instruction instead of reprogramming the FPU twice per call. Holidays take about 15% less time | [fast-ftol](docs/fast-ftol.md) |
+| `fast_ftol` | `1` | The game's float-to-int conversion uses one SSE3 instruction instead of reprogramming the FPU twice per call. Day processing takes about 15% less time | [fast-ftol](docs/fast-ftol.md) |
 | `fast_hist` | `1` | Creating a new game inserts each player history record in place instead of re-sorting the whole list. That step drops from 47 s to 3 s with every league | [fast-hist](docs/fast-hist.md) |
 | `prefetch` | `1` | Loads the next candidates' data early in the AI's shortlist scan. New-game creation's "Creating Shortlists" step takes about 28% less time | [prefetch](docs/prefetch.md) |
 
@@ -77,7 +79,8 @@ The two jobs run at different moments, never at once, so one thread count suits 
 
 - **The AI's shortlist scan** is split over `threads` threads. New games with every league take about 35% less time.
   Holidays with a much larger database took 25% less; with the stock database most scans are too small to split.
-- **Background matches** are simulated `threads` at a time. A one-year holiday takes about 33% less time with 8.
+- **Background matches**, the other clubs' fixtures on a match day, are simulated `threads` at a time. This applies to
+  every match day, not just holidays. A one-year holiday takes about 33% less time with 8.
 
 More threads than 8 gained nothing in testing. On a CPU with fewer logical processors, `auto` already uses them all;
 set a lower number if you want to leave some free for other programs.
